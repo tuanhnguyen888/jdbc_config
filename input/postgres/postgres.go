@@ -6,10 +6,15 @@ import (
 	"fmt"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
+	"github.com/patrickmn/go-cache"
 	"github.com/sirupsen/logrus"
 	"github.com/xwb1989/sqlparser"
 	"jbdc/event"
+	"jbdc/metadata"
+	"math"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type InputConfig struct {
@@ -31,6 +36,7 @@ type InputConfig struct {
 	//AddFiled []map[string]interface{}
 	Codec string
 
+	Metadata metadata.Metadata
 	Client *gorm.DB
 }
 
@@ -63,26 +69,15 @@ func InitHandler() (InputConfig, error) {
 	return conf, nil
 }
 
-func (i *InputConfig) Execute() error {
+func (i *InputConfig) Execute(ca *cache.Cache) error {
 	isSqlLastValue := strings.Contains(i.Statement,":sql_last_value")
-	var statement string
-
 	//
 	if (i.CleanRun && isSqlLastValue) || (!i.CleanRun && !i.RecordLastRun && !i.UserColumn && isSqlLastValue) {
-		switch i.TrackingColumnType {
-		case "numberic":
-			statement = strings.ReplaceAll(statement,":sql_last_value","0")
-		case "string":
-			statement = strings.ReplaceAll(statement,":sql_last_value","")
-		case "timestamps":
-			statement = strings.ReplaceAll(statement,"sql_last_value", "1970-01-01T00:00:00Z")
-		default:
-			return errors.New("tracking_column_type invalid")
-		}
 
 		//Todo: thuc hien truy van
 		if i.PagingEnabled {
 			//Todo: dùng tracking_value và :sql_value để thực hiện theo dõi theo đồng bộ với fetch_size
+			i.FetchResults(ca)
 		}else {
 			//Todo: lấy hết dữ liệu trong 1 câu truy vấn
 		}
@@ -113,6 +108,9 @@ func (i *InputConfig) Execute() error {
 		//TODO: cột được chỉ định bởi tracking_column để theo dõi giá trị cuối cùng. Giá trị cuối cùng này được lưu trữ trong metadata và cập nhật sau mỗi lần chạy.
 
 	}else {
+
+
+
 		//TODO: Cột được chỉ định bởi tracking_column để theo dõi giá trị cuối cùng, nhưng không lưu trữ giá trị cuối cùng trong metadata. Mỗi lần chạy, Logstash sẽ truy vấn dữ liệu từ giá trị cuối cùng đã lưu trữ trước đó và cập nhật giá trị cuối cùng trong bộ nhớ tạm
 
 	}
@@ -120,39 +118,55 @@ func (i *InputConfig) Execute() error {
 	return nil
 }
 
-func (i *InputConfig) CreateStatement(statement string) (string, error){
-	//sqlLastValue := 123123123123
-	isSqlValue := strings.Contains(statement, ":sql_last_value")
+func (i *InputConfig) FetchResults(ca *cache.Cache) error {
+	fetchCount := int64(0)
+	page := int(math.Ceil(float64(i.FetchSize)/float64(i.PageSize)))
+	var results []map[string]interface{}
 
-	if i.CleanRun {
-		if !isSqlValue {
-			return statement,nil
-		}else {
-			switch i.TrackingColumnType {
-			case "numberic":
-				statement = strings.ReplaceAll(statement,":sql_last_value","0")
-				return statement,nil
-			case "string":
-				statement = strings.ReplaceAll(statement,":sql_last_value","")
-				return statement,nil
-			case "timestamps":
-				statement = strings.ReplaceAll(statement,"sql_last_value", "1970-01-01T00:00:00Z")
-				return statement,nil
-			default:
-				return statement, errors.New("tracking_column_type invalid")
+	for {
+		pageCount := int64(0)
+
+		var sqlLastValue interface{}
+		if !i.RecordLastRun {
+			sqlLastValue, ok := ca.Get(i.Statement)
+			if !ok {
+				var statement string
+				switch i.TrackingColumnType {
+				case "numberic":
+					statement = strings.ReplaceAll(i.Statement,":sql_last_value",fmt.Sprintf("%v",0))
+
+				case "timestamp":
+					statement = strings.ReplaceAll(i.Statement,":sql_last_value",fmt.Sprintf("%s","1970-01-01T00:00:00Z"))
+
+				case "string":
+					statement = strings.ReplaceAll(i.Statement,":sql_last_value",fmt.Sprintf("%s",""))
+				default:
+					return errors.New(fmt.Sprintf("Unsupported tracking column type: %s", i.TrackingColumnType))
+				}
+
+
+			//	truy vấn
+			}else {
+				statement := strings.ReplaceAll(i.Statement,":sql_last_value",fmt.Sprintf("%s",sqlLastValue))
+				dns := fmt.Sprintf("%s LIMIT %s ", statement, fmt.Sprintf("%v",i.FetchSize) )
+				rows , _ :=  i.Client.Raw(dns).Rows()
+				// ... .. . .. . => results
+				if int64(len(results)) < i.FetchSize {
+
+				}else {
+					for i := 0; i < page; i++ {
+
+					}
+				}
 			}
-		}
-	}else {
-		if i.RecordLastRun || i.UserColumn {
 
+
+		} else {
+			sqlLastValue =
 		}
+
 	}
 
-	return "", nil
-}
-
-func (i *InputConfig) FetchResults(statement string)  {
-	//tableName := getMainTableFromQuery(statement)
 	//count = i.Client.Raw("Select count(*) from ")
 
 	//recordCount := 0

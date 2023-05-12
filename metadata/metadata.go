@@ -1,6 +1,9 @@
 package metadata
 
-import "time"
+import (
+	"github.com/sirupsen/logrus"
+	"time"
+)
 
 type Metadata struct {
 	LastRun        string
@@ -15,5 +18,5 @@ func InitMetadata() {
 		TrackingColumn: "created_at",
 	}
 
-	type
+	logrus.Info(metadata)
 }
