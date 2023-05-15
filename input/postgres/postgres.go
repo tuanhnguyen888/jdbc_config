@@ -73,30 +73,24 @@ func (i *InputConfig) Execute(ca *cache.Cache) error {
 	isSqlLastValue := strings.Contains(i.Statement,":sql_last_value")
 	//
 	if (i.CleanRun && isSqlLastValue) || (!i.CleanRun && !i.RecordLastRun && !i.UserColumn && isSqlLastValue) {
+		//Truy vấn với giá trị :sql_last_value là default
 
-		//Todo: thuc hien truy van
 		if i.PagingEnabled {
 			//Todo: dùng tracking_value và :sql_value để thực hiện theo dõi theo đồng bộ với fetch_size
-			i.FetchResults(ca)
+			i.FetchResultsWithPaging(ca)
 		}else {
 			//Todo: lấy hết dữ liệu trong 1 câu truy vấn
 		}
-
 
 	}
 
-	//
-	if (i.CleanRun && isSqlLastValue) || (!i.CleanRun && !i.RecordLastRun && !i.UserColumn && isSqlLastValue){
-		//Todo: thuc hien truy van
-		if i.PagingEnabled {
-			//Todo: Error
-		}else {
-			//Todo: lấy hết dữ liệu trong 1 câu truy vấn
-		}
+	if (i.CleanRun && !isSqlLastValue) || (!i.CleanRun && !i.RecordLastRun && !i.UserColumn && !isSqlLastValue){
+		//	lấy hết dữ liệu trong một câu truy vấn
+
 	}
 	//
 	if i.UserColumn && !isSqlLastValue {
-		return errors.New("")
+		return errors.New("use _column_value is true, but it have :sql_last_value in statement")
 	}
 	//
 	if !i.UserColumn && i.RecordLastRun {
@@ -109,8 +103,6 @@ func (i *InputConfig) Execute(ca *cache.Cache) error {
 
 	}else {
 
-
-
 		//TODO: Cột được chỉ định bởi tracking_column để theo dõi giá trị cuối cùng, nhưng không lưu trữ giá trị cuối cùng trong metadata. Mỗi lần chạy, Logstash sẽ truy vấn dữ liệu từ giá trị cuối cùng đã lưu trữ trước đó và cập nhật giá trị cuối cùng trong bộ nhớ tạm
 
 	}
@@ -118,7 +110,17 @@ func (i *InputConfig) Execute(ca *cache.Cache) error {
 	return nil
 }
 
-func (i *InputConfig) FetchResults(ca *cache.Cache) error {
+func (c *InputConfig) FetchResultsByDefault()  {
+
+}
+
+func (c *InputConfig) FetchResultsWithoutPaging(ca *cache.Cache)  {
+	if c.RecordLastRun {
+
+	}
+}
+
+func (i *InputConfig) FetchResultsWithPaging(ca *cache.Cache) error {
 	fetchCount := int64(0)
 	page := int(math.Ceil(float64(i.FetchSize)/float64(i.PageSize)))
 	var results []map[string]interface{}

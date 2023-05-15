@@ -8,4 +8,5 @@ require (
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.7.0
 	github.com/xwb1989/sqlparser v0.0.0-20180606152119-120387863bf2
+	gopkg.in/goracle.v2 v2.24.1
 )
