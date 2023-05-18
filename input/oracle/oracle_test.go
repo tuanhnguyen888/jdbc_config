@@ -3,6 +3,8 @@ package oracle
 import (
 	"database/sql"
 	"fmt"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	_ "gopkg.in/goracle.v2"
 	"log"
 	"testing"
@@ -16,16 +18,10 @@ func TestInit(t *testing.T) {
 	}
 	defer db.Close()
 
-	// Kiểm tra kết nối
-	err = db.Ping()
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	fmt.Println("Kết nối thành công đến cơ sở dữ liệu Oracle XE")
 
 	// Thực hiện truy vấn SELECT
-	rows, err := db.Query("SELECT * FROM new_table")
+	rows, err := db.Query("SELECT * FROM SYS.NEW_EMPLOYEES")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -72,11 +68,26 @@ func TestInit(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	// In ra kết quả
-	for _, row := range results {
-		for col, val := range row {
-			fmt.Printf("%s: %v\t", col, val)
-		}
-		fmt.Println()
+	logrus.Info(results)
+}
+
+func TestName(t *testing.T) {
+	db, err := sql.Open("goracle", fmt.Sprintf("user=%s/%s@%s:%s/%s AS SYSDBA", "SYS", "1", "localhost", "1521", "XE"))
+	if err != nil {
+		logrus.Error(err)
 	}
+	oracle := &oracleImpl{
+		db: db,
+	}
+	defer  oracle.Close()
+
+	rows , err := oracle.Query("SELECT * FROM SYS.NEW_EMPLOYEES")
+	if err != nil {
+		logrus.Error(err)
+	}
+
+	results, err := ScanValue(rows)
+	assert.NoError(t, err)
+	logrus.Info(results)
+
 }
