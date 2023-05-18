@@ -12,9 +12,8 @@ import (
 	"jbdc/event"
 	"jbdc/metadata"
 	"math"
-	"strconv"
+
 	"strings"
-	"time"
 )
 
 type InputConfig struct {
@@ -71,6 +70,10 @@ func InitHandler() (InputConfig, error) {
 
 func (i *InputConfig) Execute(ca *cache.Cache) error {
 	isSqlLastValue := strings.Contains(i.Statement,":sql_last_value")
+
+	if i.CleanRun {
+	//	clean metadata
+	}
 	//
 	if (i.CleanRun && isSqlLastValue) || (!i.CleanRun && !i.RecordLastRun && !i.UserColumn && isSqlLastValue) {
 		//Truy vấn với giá trị :sql_last_value là default
@@ -121,14 +124,14 @@ func (c *InputConfig) FetchResultsWithoutPaging(ca *cache.Cache)  {
 }
 
 func (i *InputConfig) FetchResultsWithPaging(ca *cache.Cache) error {
-	fetchCount := int64(0)
+	//fetchCount := int64(0)
 	page := int(math.Ceil(float64(i.FetchSize)/float64(i.PageSize)))
 	var results []map[string]interface{}
 
 	for {
-		pageCount := int64(0)
+		//pageCount := int64(0)
 
-		var sqlLastValue interface{}
+		//var sqlLastValue interface{}
 		if !i.RecordLastRun {
 			sqlLastValue, ok := ca.Get(i.Statement)
 			if !ok {
@@ -143,6 +146,7 @@ func (i *InputConfig) FetchResultsWithPaging(ca *cache.Cache) error {
 				case "string":
 					statement = strings.ReplaceAll(i.Statement,":sql_last_value",fmt.Sprintf("%s",""))
 				default:
+					logrus.Error(statement)
 					return errors.New(fmt.Sprintf("Unsupported tracking column type: %s", i.TrackingColumnType))
 				}
 
@@ -150,9 +154,10 @@ func (i *InputConfig) FetchResultsWithPaging(ca *cache.Cache) error {
 			//	truy vấn
 			}else {
 				statement := strings.ReplaceAll(i.Statement,":sql_last_value",fmt.Sprintf("%s",sqlLastValue))
-				dns := fmt.Sprintf("%s LIMIT %s ", statement, fmt.Sprintf("%v",i.FetchSize) )
-				rows , _ :=  i.Client.Raw(dns).Rows()
+				//dns := fmt.Sprintf("%s LIMIT %s ", statement, fmt.Sprintf("%v",i.FetchSize) )
+				//rows , _ :=  i.Client.Raw(dns).Rows()
 				// ... .. . .. . => results
+				logrus.Info(statement)
 				if int64(len(results)) < i.FetchSize {
 
 				}else {
@@ -164,7 +169,7 @@ func (i *InputConfig) FetchResultsWithPaging(ca *cache.Cache) error {
 
 
 		} else {
-			sqlLastValue =
+			//sqlLastValue =
 		}
 
 	}
@@ -179,7 +184,7 @@ func (i *InputConfig) FetchResultsWithPaging(ca *cache.Cache) error {
 	//}
 }
 
-func (i *InputConfig) PushEvent(results []map[string]interface{}) error  {
+func (i *InputConfig) PushEvent(results []map[string]interface{} ) error  {
 	return nil
 }
 

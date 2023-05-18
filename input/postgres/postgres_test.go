@@ -13,7 +13,7 @@ func TestSQL(t *testing.T) {
 	db, err :=gorm.Open("postgres",dns)
 	assert.NoError(t, err)
 	var number interface{}
-	err = db.Raw("SELECT * FROM logs").Count(&number).Error
+	err = db.Raw("SELECT count(*) FROM logs").Count(&number).Error
 	logrus.Error(err)
 	logrus.Info(number)
 }
