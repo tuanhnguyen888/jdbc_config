@@ -3,6 +3,7 @@ package oracle
 import (
 	"database/sql"
 	"fmt"
+	//_ "github.com/godror/godror"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	_ "gopkg.in/goracle.v2"

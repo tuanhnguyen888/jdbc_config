@@ -1,6 +1,6 @@
-package JDBC_Plugin
+package jdbc
 
-import "jbdc/event"
+import "jdbc/event"
 
 func main() {
 	msg := make(chan []event.Event)
