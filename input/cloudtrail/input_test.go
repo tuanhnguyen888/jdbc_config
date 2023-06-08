@@ -2,12 +2,15 @@ package cloudtrail
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/defaults"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -18,11 +21,11 @@ func TestName(t *testing.T) {
 		SQSWaitTime:         20,
 		SQSMaxReceiveCount:  10,
 		FIPSEnabled:         false,
-		MaxNumberOfMessages: 10,
+		MaxNumberOfMessages: 2,
 		QueueURL:            "https://sqs.us-east-1.amazonaws.com/887134122148/aws-cloudtrail",
 		AWSConfig:           ConfigAWS{
-			AccessKeyID:          "AKIA45DKQOCSOWJR2LFX",
-			SecretAccessKey:      "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",
+			AccessKeyID:          "AKIA45DKQOCSAB3M5HIH",
+			SecretAccessKey:      "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",
 			SessionToken:         "",
 			Endpoint:             "",
 			//RoleArn:              "arn:aws:iam::887134122148:role/aws-service-role/organizations.amazonaws.com/AWSServiceRoleForOrganizations",
@@ -70,9 +73,9 @@ func TestReal(t *testing.T) {
 	req := sqsCl.ReceiveMessageRequest(
 		&sqs.ReceiveMessageInput{
 			QueueUrl:            aws.String("https://sqs.us-east-1.amazonaws.com/887134122148/aws-cloudtrail"),
-			MaxNumberOfMessages: aws.Int64(int64(10)),
+			MaxNumberOfMessages: aws.Int64(int64(2)),
 			VisibilityTimeout:   aws.Int64(int64(200)),
-			WaitTimeSeconds:     aws.Int64(int64(10)),
+			WaitTimeSeconds:     aws.Int64(int64(20)),
 			AttributeNames:      []sqs.QueueAttributeName{sqsApproximateReceiveCountAttribute},
 		})
 	resp, err := req.Send(context.TODO())
@@ -81,16 +84,31 @@ func TestReal(t *testing.T) {
 	logrus.Info(resp.Messages)
 
 	for _,msg := range resp.Messages {
-		logrus.Println(*msg.Body)
+		jsonStr := *msg.Body
+
+		var events s3EventsV2
+		dec := json.NewDecoder(strings.NewReader(jsonStr))
+		 _ = dec.Decode(&events)
+		fmt.Printf("%#v\n", events)
+		var out []s3EventV2
+		for _, record := range events.Records {
+			// Unescape s3 key name. For example, convert "%3D" back to "=".
+			key, _ := url.QueryUnescape(record.S3.Object.Key)
+			record.S3.Object.Key = key
+			out = append(out, record)
+			fmt.Println("Event: ", record)
+		}
+		logrus.Warn("Events: ", out)
+
+		reqDel := sqsCl.DeleteMessageRequest(
+			&sqs.DeleteMessageInput{
+				QueueUrl:      aws.String("https://sqs.us-east-1.amazonaws.com/887134122148/aws-cloudtrail"),
+				ReceiptHandle: msg.ReceiptHandle,
+			})
+
+		_, err = reqDel.Send(context.TODO())
+		assert.NoError(t, err)
 	}
 
-	// sqsCl.ReceiveMessageInput{
-	//	AttributeNames:          nil,
-	//	MaxNumberOfMessages:     nil,
-	//	MessageAttributeNames:   nil,
-	//	QueueUrl:                nil,
-	//	ReceiveRequestAttemptId: nil,
-	//	VisibilityTimeout:       nil,
-	//	WaitTimeSeconds:         nil,
-	//}
+
 }
