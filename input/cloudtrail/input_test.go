@@ -15,37 +15,32 @@ import (
 )
 
 func TestName(t *testing.T) {
-	conf := config{
-		APITimeout:          50,
-		VisibilityTimeout:   50,
-		SQSWaitTime:         20,
-		SQSMaxReceiveCount:  10,
-		FIPSEnabled:         false,
-		MaxNumberOfMessages: 2,
-		QueueURL:            "https://sqs.us-east-1.amazonaws.com/887134122148/aws-cloudtrail",
-		AWSConfig:           ConfigAWS{
-			AccessKeyID:          "AKIA45DKQOCSAB3M5HIH",
-			SecretAccessKey:      "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",
-			SessionToken:         "",
-			Endpoint:             "",
-			//RoleArn:              "arn:aws:iam::887134122148:role/aws-service-role/organizations.amazonaws.com/AWSServiceRoleForOrganizations",
-			AWSPartition:         "",
-			ProxyUrl:             "",
-		},
+	conf := &ConfigInput{
+		ApiTimeout:          120 ,
+		VisibilityTimeout:   300 ,
+		SQSWaitTime:         20 ,
+		MaxNumberOfMessages: 5,
+		Endpoint: "amazonaws.com",
+		DefaultRegion: "us-east-1",
+		QueueUrl: "https://sqs.us-east-1.amazonaws.com/887134122148/aws-cloudtrail",
+		AccessKeyId:          "AKIA45DKQOCSAB3M5HIH",
+		SecretAccessKey:      "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",
+		SessionToken:         "",
+		//RoleArn:              "arn:aws:iam::887134122148:role/aws-service-role/organizations.amazonaws.com/AWSServiceRoleForOrganizations",
 	}
 
-	s3 ,err := newInput(conf)
+	err := conf.Validate()
 	assert.NoError(t, err)
+	ctx := context.Background()
 
-	err = s3.Run()
-	logrus.Error(err)
-	assert.Error(t, err)
+	err = conf.Run(ctx)
+	assert.NoError(t, err)
 }
 //
 
 func TestReal(t *testing.T) {
-	conf := ConfigAWS{
-		AccessKeyID:          "AKIA45DKQOCSAB3M5HIH",
+	conf := ConfigInput{
+		AccessKeyId:          "AKIA45DKQOCSAB3M5HIH",
 		SecretAccessKey:      "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",
 		SessionToken:         "",
 		Endpoint:             "",
@@ -54,7 +49,7 @@ func TestReal(t *testing.T) {
 
 	awsConfig := defaults.Config()
 	awsCredentials := aws.Credentials{
-		AccessKeyID:     conf.AccessKeyID,
+		AccessKeyID:     conf.AccessKeyId,
 		SecretAccessKey: conf.SecretAccessKey,
 	}
 	awsConfig.Region = "us-east-1"

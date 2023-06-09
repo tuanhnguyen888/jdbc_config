@@ -4,113 +4,202 @@ import (
 	"context"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
 )
 
+const (
+	ModuleName = "cloudtrail"
+	sqsRetryDelay = 10 * time.Second
+	sqsApproximateReceiveCountAttribute = "ApproximateReceiveCount"
+)
 
-type s3Input struct {
-	config    config
-	awsConfig aws.Config
-	//store     beater.StateStore
+// ConfigInput holds the configuration json fields and internal objects
+type ConfigInput struct {
+	//config.InputConfig
+	QueueUrl		 		string				`mapstructure:"queue_url"`
+	VisibilityTimeout 		int64				`mapstructure:"visibility_timeout"`
+	SQSWaitTime         	int64       		`mapstructure:"sqs.wait_time"`
+	MaxNumberOfMessages 	int					`mapstructure:"max_number_of_messages"`
+	ApiTimeout 				int64				`mapstructure:"api_timeout"`
+	SQSMaxReceiveCount  int                  	`mapstructure:"sqs.max_receive_count"`
+	AccessKeyId				string				`mapstructure:"access_key_id"`
+	SecretAccessKey			string				`mapstructure:"secret_access_key"`
+	SessionToken 			string				`mapstructure:"session_token"`
+	RoleArn				 	string				`mapstructure:"role_arn"`
+	Endpoint          		string				`mapstructure:"endpoint"`
+	DefaultRegion			string				`mapstructure:"default_region"`
+	ProxyUrl		 		string				`mapstructure:"proxy_url"`
+	sqsClient				*sqs.Client
+	s3Client    			*s3.Client
+
 }
 
-func newInput(config config) (*s3Input, error) {
-	awsConfig, err := InitializeAWSConfig(config.AWSConfig)
+// DefaultInputConfig returns an ConfigInput struct with default values
+func DefaultInputConfig() ConfigInput {
+	//[commonConfig.Name](http://commonconfig.name/) = ModuleName
+	return ConfigInput{
+		ApiTimeout:          120 ,
+		VisibilityTimeout:   300 ,
+		SQSWaitTime:         20 ,
+		MaxNumberOfMessages: 5,
+		Endpoint: "amazonaws.com",
+		DefaultRegion: "us-east-1",
+
+	}
+}
+
+//func InitHandler(ctx context.Context) (config.InputPlugin, error) {
+//	conf := DefaultInputConfig(commonConfig)
+//	if err := mapstructure.Decode(raw, &conf); err != nil {
+//		return nil, err
+//	}
+//
+//
+//	if err := conf.Validate() ; err != nil {
+//		return nil, err
+//	}
+//
+//	codec := raw["codec"]
+//	if codec == nil {
+//		conf.Codec["type"] = "json"
+//		codecHandler, _ := config.MapCodecHandler["json"]
+//		conf.CodecPlugin, _ = codecHandler(ctx, conf.Codec)
+//	}
+//
+//	return &conf, nil
+//
+//
+//}
+
+func (c *ConfigInput) Validate() error {
+	if c.QueueUrl == "" {
+		return fmt.Errorf("queue_url is require, input cloudtrail will stop")
+	}
+
+
+	if  c.VisibilityTimeout <= int64(0) || c.VisibilityTimeout > int64(43200) {
+		return fmt.Errorf("visibility_timeout <%v> must be greater than 0 and "+
+			"less than or equal to 12h", c.VisibilityTimeout)
+	}
+
+	if c.SQSWaitTime <= int64(0) || c.SQSWaitTime > int64(20) {
+		return fmt.Errorf("wait_time <%v> must be greater than 0 and "+
+			"less than or equal to 20s", c.SQSWaitTime)
+	}
+
+	if c.MaxNumberOfMessages <= 0 {
+		return fmt.Errorf("max_number_of_messages <%v> must be greater than 0",
+			c.MaxNumberOfMessages)
+	}
+
+	if c.ApiTimeout < c.SQSWaitTime {
+		return fmt.Errorf("api_timeout <%v> must be greater than the sqs.wait_time <%v",
+			c.ApiTimeout, c.SQSWaitTime)
+	}
+
+	return nil
+}
+
+func (c *ConfigInput) Run(ctx context.Context) error {
+	if err := c.CreateSQSReceiver(); err != nil{
+		return err
+	}
+
+	if err := c.Receive(ctx);err != nil{
+		return err
+	}
+
+	return nil
+}
+
+func (c *ConfigInput) CreateSQSReceiver() error {
+	awsConfig, err := c.InitializeAWSConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize AWS credentials: %w", err)
+		return err
 	}
+	regionName, err := getRegionFromQueueURL(c.QueueUrl, c.Endpoint)
+	if err != nil {
+		return fmt.Errorf("failed to get AWS region from queue_url: %w", err)
+	}
+	awsConfig.Region = regionName
 
-	return &s3Input{
-		config:    config,
-		awsConfig: awsConfig,
-		//store:     store,
-	}, nil
+
+	c.sqsClient = sqs.New(c.EnrichAWSConfigWithEndpoint(c.Endpoint,"sqs",awsConfig.Region,awsConfig))
+	c.s3Client = s3.New(c.EnrichAWSConfigWithEndpoint(c.Endpoint,"s3",awsConfig.Region,awsConfig))
+
+	return nil
+
 }
 
-func (s *s3Input) Run()  error {
-	//var err error
-	ctx, cancelInputCtx := context.WithCancel(context.Background())
-	go func() {
-		defer cancelInputCtx()
-		select {
-		//case <-inputContext.Cancelation.Done():
-		case <-ctx.Done():
-		}
-	}()
-
-	defer cancelInputCtx()
-	if s.config.QueueURL != "" {
-
-		regionName, err := getRegionFromQueueURL(s.config.QueueURL, s.config.AWSConfig.Endpoint)
+func (c *ConfigInput) Receive(ctx context.Context) error {
+	var workerWg sync.WaitGroup
+	for ctx.Err() == nil {
+		msgs, err := c.ReceiveMessage(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to get AWS region from queue_url: %w", err)
+			if ctx.Err() == nil {
+				logrus.Warn("SQS ReceiveMessage returned an error. Will retry after a short delay.", "error", err)
+				// Throttle retries.
+				//timed.Wait](https://timed.wait/)(ctx, sqsRetryDelay)
+			}
+			continue
 		}
-		s.awsConfig.Region = regionName
 
-		// Create SQS receiver and S3 notification processor.
-		receiver, err := s.createSQSReceiver()
-		if err != nil {
-			return fmt.Errorf("failed to initialize sqs receiver: %w", err)
-		}
-		//defer receiver.metrics.Close()
 
-		if err := receiver.Receive(ctx); err != nil {
-			return err
+	workerWg.Add(len(msgs))
+	for _,msg := range msgs{
+		go func(msg sqs.Message) {
+			defer func() {
+				workerWg.Done()
+			}()
+			if err := c.ProcessSQS(ctx, &msg); err != nil {
+				logrus.Warn("Failed processing SQS message.", "error", err, "message_id", *msg.MessageId)
+			}
+		}(msg)
 		}
 	}
+	workerWg.Wait()
 
-	return fmt.Errorf("QueueURL is required")
+	if errors.Is(ctx.Err(), context.Canceled) {
+		// A canceled context is a normal shutdown.
+		return nil
+	}
+	return ctx.Err()
+
 }
 
+func (c *ConfigInput)ReceiveMessage(ctx context.Context) ([]sqs.Message,error) {
+	const sqsMaxNumberOfMessagesLimit = 10
 
-func (in *s3Input) createSQSReceiver() (*sqsReader, error) {
-	s3ServiceName := "s3"
-	if in.config.FIPSEnabled {
-		s3ServiceName = "s3-fips"
+	req := c.sqsClient.ReceiveMessageRequest(
+		&sqs.ReceiveMessageInput{
+			QueueUrl:            aws.String(c.QueueUrl),
+			MaxNumberOfMessages: aws.Int64(int64(min(c.MaxNumberOfMessages, sqsMaxNumberOfMessagesLimit))),
+			VisibilityTimeout:   aws.Int64(c.VisibilityTimeout),
+			WaitTimeSeconds:     aws.Int64(c.SQSWaitTime),
+			AttributeNames:      []sqs.QueueAttributeName{sqsApproximateReceiveCountAttribute},
+		})
+
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(c.ApiTimeout) * time.Second )
+	defer cancel()
+
+	resp, err := req.Send(ctx)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			err = fmt.Errorf("api_timeout exceeded: %w", err)
+		}
+		return nil, fmt.Errorf("sqs ReceiveMessage failed: %w", err)
 	}
 
-	sqsAPI := &awsSQSAPI{
-		client:            sqs.New(EnrichAWSConfigWithEndpoint(in.config.AWSConfig.Endpoint, "sqs", in.awsConfig.Region, in.awsConfig)),
-		queueURL:          in.config.QueueURL,
-		apiTimeout:        in.config.APITimeout,
-		visibilityTimeout: in.config.VisibilityTimeout,
-		longPollWaitTime:  in.config.SQSWaitTime,
-	}
+	return resp.Messages, nil
 
-	//s3API := &awsS3API{
-	//	client: s3.New(EnrichAWSConfigWithEndpoint(in.config.AWSConfig.Endpoint, s3ServiceName, in.awsConfig.Region, in.awsConfig)),
-	//}
-
-	//log := ctx.Logger.With("queue_url", in.config.QueueURL)
-	logrus.Infof("AWS api_timeout is set to %v.", in.config.APITimeout)
-	logrus.Infof("AWS region is set to %v.", in.awsConfig.Region)
-	logrus.Infof("AWS SQS visibility_timeout is set to %v.", in.config.VisibilityTimeout)
-	logrus.Infof("AWS SQS max_number_of_messages is set to %v.", in.config.MaxNumberOfMessages)
-	logrus.Debugf("AWS S3 service name is %v.", s3ServiceName)
-
-	//metricRegistry := monitoring.GetNamespace("dataset").GetRegistry()
-	//metrics := newInputMetrics(metricRegistry, ctx.ID)
-
-	//fileSelectors := in.config.FileSelectors
-	//if len(in.config.FileSelectors) == 0 {
-	//	fileSelectors = []fileSelectorConfig{{ReaderConfig: in.config.ReaderConfig}}
-	//}
-	//script, err := newScriptFromConfig(log.Named("sqs_script"), in.config.SQSScript)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//s3EventHandlerFactory := newS3ObjectProcessorFactory(log.Named("s3"), metrics, s3API, client, fileSelectors)
-
-	sqsMessageHandler := newSQSS3EventProcessor( sqsAPI, in.config.VisibilityTimeout, in.config.SQSMaxReceiveCount)
-
-	sqsReader := newSQSReader( sqsAPI, in.config.MaxNumberOfMessages, sqsMessageHandler)
-
-	return sqsReader, nil
 }
-
 
 func getRegionFromQueueURL(queueURL string, endpoint string) (string, error) {
 	// get region from queueURL
@@ -125,5 +214,12 @@ func getRegionFromQueueURL(queueURL string, endpoint string) (string, error) {
 			return queueHostSplit[1], nil
 		}
 	}
-	return "", fmt.Errorf("QueueURL is not in format: https://sqs.{REGION_ENDPOINT}.{ENDPOINT}/{ACCOUNT_NUMBER}/{QUEUE_NAME}")
+	return "", fmt.Errorf("QueueURL is not in format: [https://sqs](https://sqs/).{REGION_ENDPOINT}.{ENDPOINT}/{ACCOUNT_NUMBER}/{QUEUE_NAME}")
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
