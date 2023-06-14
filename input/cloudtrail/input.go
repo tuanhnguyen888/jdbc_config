@@ -140,6 +140,8 @@ func (c *ConfigInput) CreateSQSReceiver() error {
 
 func (c *ConfigInput) Receive(ctx context.Context) error {
 	var workerWg sync.WaitGroup
+	var count int
+
 	for ctx.Err() == nil {
 		msgs, err := c.ReceiveMessage(ctx)
 		if err != nil {
@@ -153,14 +155,21 @@ func (c *ConfigInput) Receive(ctx context.Context) error {
 
 
 	workerWg.Add(len(msgs))
+		var muxtex sync.Mutex
 	for _,msg := range msgs{
+
 		go func(msg sqs.Message) {
 			defer func() {
 				workerWg.Done()
 			}()
-			if err := c.ProcessSQS(ctx, &msg); err != nil {
+			muxtex.Lock()
+			count++
+			logrus.Println("--------", count)
+			if err := c.ProcessSQS(ctx, &msg,count); err != nil {
 				logrus.Warn("Failed processing SQS message.", "error", err, "message_id", *msg.MessageId)
 			}
+			muxtex.Unlock()
+
 		}(msg)
 		}
 	}

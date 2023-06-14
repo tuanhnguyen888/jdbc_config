@@ -34,7 +34,7 @@ type s3EventV2 struct {
 	} `json:"s3"`
 }
 
-func (c *ConfigInput) ProcessSQS(ctx context.Context, msg *sqs.Message)error  {
+func (c *ConfigInput) ProcessSQS(ctx context.Context, msg *sqs.Message,count int)error  {
 	keepaliveCtx, keepaliveCancel := context.WithCancel(ctx)
 	defer keepaliveCancel()
 
@@ -44,7 +44,7 @@ func (c *ConfigInput) ProcessSQS(ctx context.Context, msg *sqs.Message)error  {
 	keepaliveWg.Add(1)
 	go c.keepalive(keepaliveCtx, &keepaliveWg, msg)
 
-	processingErr := c.processS3Events(ctx, *msg.Body)
+	processingErr := c.processS3Events(ctx, *msg.Body,count)
 
 	// Stop keepalive routine before changing visibility.
 	keepaliveCancel()
@@ -138,28 +138,30 @@ func (c *ConfigInput) DeleteMessage(ctx context.Context, msg *sqs.Message) error
 
 }
 
-func (c *ConfigInput) processS3Events(ctx context.Context, body string) error {
+func (c *ConfigInput) processS3Events(ctx context.Context, body string,count int) error {
 	s3Events, err := c.getS3Notifications(body)
 	if err != nil {
 		return err
 	}
 
+
 	if len(s3Events) == 0 {
 		return nil
 	}
-
+	fmt.Println("\n ---------  ", count)
 	logrus.Debugf("SQS message contained %d S3 event notifications.", len(s3Events))
 	defer logrus.Debug("End processing SQS S3 event notifications.")
 
 
 	// Wait for all events to be ACKed before proceeding.
-	fmt.Println("\n ---------  ", len(s3Events))
+	var countEvent int
 	for _, event := range s3Events {
+		countEvent ++
+		// Process S3 object (download, parse, create events)
+		logrus.Printf("%v ---- %#v",count,event)
+		c.ProcessS3Object(ctx,event,countEvent,count)
 
-		// Process S3 object (download, parse, create events).
-		logrus.Printf("%#v",event)
 	}
-
 	return nil
 }
 

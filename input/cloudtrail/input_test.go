@@ -104,6 +104,4 @@ func TestReal(t *testing.T) {
 		_, err = reqDel.Send(context.TODO())
 		assert.NoError(t, err)
 	}
-
-
 }
