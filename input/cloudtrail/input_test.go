@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestName(t *testing.T) {
@@ -24,7 +25,7 @@ func TestName(t *testing.T) {
 		DefaultRegion: "us-east-1",
 		QueueUrl: "https://sqs.us-east-1.amazonaws.com/887134122148/aws-cloudtrail",
 		AccessKeyId:          "AKIA45DKQOCSAB3M5HIH",
-		SecretAccessKey:      "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",
+		SecretAccessKey:      "1ZMBpEmg4i+MxsdLZupvqqUSeB/r/XI2Mhb/lMDB9",
 		SessionToken:         "",
 		//RoleArn:              "arn:aws:iam::887134122148:role/aws-service-role/organizations.amazonaws.com/AWSServiceRoleForOrganizations",
 	}
@@ -32,9 +33,13 @@ func TestName(t *testing.T) {
 	err := conf.Validate()
 	assert.NoError(t, err)
 	ctx := context.Background()
-
-	err = conf.Run(ctx)
+	go func() {
+		err = conf.Run(ctx)
+	}()
+	time.Sleep(50 * time.Second)
+	ctx.Done()
 	assert.NoError(t, err)
+	time.Sleep(200 * time.Millisecond)
 }
 //
 

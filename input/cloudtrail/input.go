@@ -148,7 +148,7 @@ func (c *ConfigInput) Receive(ctx context.Context) error {
 			if ctx.Err() == nil {
 				logrus.Warn("SQS ReceiveMessage returned an error. Will retry after a short delay.", "error", err)
 				// Throttle retries.
-				//timed.Wait](https://timed.wait/)(ctx, sqsRetryDelay)
+				Wait(ctx, sqsRetryDelay)
 			}
 			continue
 		}
@@ -164,7 +164,7 @@ func (c *ConfigInput) Receive(ctx context.Context) error {
 			}()
 			muxtex.Lock()
 			count++
-			logrus.Println("--------", count)
+			//logrus.Println("--------", count)
 			if err := c.ProcessSQS(ctx, &msg,count); err != nil {
 				logrus.Warn("Failed processing SQS message.", "error", err, "message_id", *msg.MessageId)
 			}
@@ -231,4 +231,21 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+type canceler interface {
+	Done() <-chan struct{}
+	Err() error
+}
+
+func Wait(ctx canceler, duration time.Duration) error {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
