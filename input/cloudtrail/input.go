@@ -82,28 +82,22 @@ func (c *ConfigInput) Validate() error {
 	if c.QueueUrl == "" {
 		return fmt.Errorf("queue_url is require, input cloudtrail will stop")
 	}
-
-
 	if  c.VisibilityTimeout <= int64(0) || c.VisibilityTimeout > int64(43200) {
 		return fmt.Errorf("visibility_timeout <%v> must be greater than 0 and "+
 			"less than or equal to 12h", c.VisibilityTimeout)
 	}
-
 	if c.SQSWaitTime <= int64(0) || c.SQSWaitTime > int64(20) {
 		return fmt.Errorf("wait_time <%v> must be greater than 0 and "+
 			"less than or equal to 20s", c.SQSWaitTime)
 	}
-
 	if c.MaxNumberOfMessages <= 0 {
 		return fmt.Errorf("max_number_of_messages <%v> must be greater than 0",
 			c.MaxNumberOfMessages)
 	}
-
 	if c.ApiTimeout < c.SQSWaitTime {
 		return fmt.Errorf("api_timeout <%v> must be greater than the sqs.wait_time <%v",
 			c.ApiTimeout, c.SQSWaitTime)
 	}
-
 	return nil
 }
 
@@ -111,11 +105,9 @@ func (c *ConfigInput) Run(ctx context.Context) error {
 	if err := c.CreateSQSReceiver(); err != nil{
 		return err
 	}
-
 	if err := c.Receive(ctx);err != nil{
 		return err
 	}
-
 	return nil
 }
 
@@ -130,12 +122,10 @@ func (c *ConfigInput) CreateSQSReceiver() error {
 	}
 	awsConfig.Region = regionName
 
-
 	c.sqsClient = sqs.New(c.EnrichAWSConfigWithEndpoint(c.Endpoint,"sqs",awsConfig.Region,awsConfig))
 	c.s3Client = s3.New(c.EnrichAWSConfigWithEndpoint(c.Endpoint,"s3",awsConfig.Region,awsConfig))
 
 	return nil
-
 }
 
 func (c *ConfigInput) Receive(ctx context.Context) error {
@@ -153,9 +143,8 @@ func (c *ConfigInput) Receive(ctx context.Context) error {
 			continue
 		}
 
-
 	workerWg.Add(len(msgs))
-		var muxtex sync.Mutex
+	var muxtex sync.Mutex
 	for _,msg := range msgs{
 
 		go func(msg sqs.Message) {
@@ -205,6 +194,7 @@ func (c *ConfigInput)ReceiveMessage(ctx context.Context) ([]sqs.Message,error) {
 		}
 		return nil, fmt.Errorf("sqs ReceiveMessage failed: %w", err)
 	}
+	//fmt.Println(resp)
 
 	return resp.Messages, nil
 

@@ -24,7 +24,7 @@ func (c *ConfigInput) ProcessS3Object(ctx context.Context, obj s3EventV2,countE 
 	defer body.Close()
 	//p.s3Metadata = meta
 
-	reader, err := c.addGzipDecoderIfNeeded(body)
+	reader, err := c.AddGzipDecoderIfNeeded(body)
 	if err != nil {
 		return errors.Wrap(err, "failed checking for gzip content")
 	}
@@ -35,7 +35,7 @@ func (c *ConfigInput) ProcessS3Object(ctx context.Context, obj s3EventV2,countE 
 	//}
 
 	// Process object content stream.
-	err = c.readJSON(ctx,reader,obj,count)
+	err = c.ReadJSON(ctx,reader,obj,count)
 	if err != nil {
 		return err
 	}
@@ -43,7 +43,7 @@ func (c *ConfigInput) ProcessS3Object(ctx context.Context, obj s3EventV2,countE 
 	return nil
 }
 
-func (p *ConfigInput) addGzipDecoderIfNeeded(body io.Reader) (io.Reader, error) {
+func (p *ConfigInput) AddGzipDecoderIfNeeded(body io.Reader) (io.Reader, error) {
 	bufReader := bufio.NewReader(body)
 
 	gzipped, err := isStreamGzipped(bufReader)
@@ -97,15 +97,16 @@ func (c *ConfigInput) GetObject(ctx context.Context, bucket, key string) (*s3.Ge
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
-
 	resp, err := req.Send(ctx)
+	//fmt.Printf("resp: %T %v \n",resp,resp)
+
 	if err != nil {
 		return nil, fmt.Errorf("s3 GetObject failed: %w", err)
 	}
 	return resp, nil
 }
 
-func (p *ConfigInput) readJSON(ctx context.Context,r io.Reader,obj s3EventV2,count int) error {
+func (p *ConfigInput) ReadJSON(ctx context.Context,r io.Reader,obj s3EventV2,count int) error {
 	dec := json.NewDecoder(r)
 	dec.UseNumber()
 	var bashEvent []event2.Event

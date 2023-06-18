@@ -149,6 +149,7 @@ func (c *ConfigInput) processS3Events(ctx context.Context, body string,count int
 		return nil
 	}
 	fmt.Println("\n ---------  ", count)
+	//fmt.Println(body)
 	logrus.Debugf("SQS message contained %d S3 event notifications.", len(s3Events))
 	defer logrus.Debug("End processing SQS S3 event notifications.")
 
@@ -160,7 +161,6 @@ func (c *ConfigInput) processS3Events(ctx context.Context, body string,count int
 		// Process S3 object (download, parse, create events)
 		logrus.Printf("%v ---- %#v",count,event)
 		c.ProcessS3Object(ctx,event,countEvent,count)
-
 	}
 	return nil
 }
@@ -173,6 +173,7 @@ func (p *ConfigInput) getS3Notifications(body string) ([]s3EventV2, error) {
 		logrus.Debug("Invalid SQS message body.", "sqs_message_body", body)
 		return nil, fmt.Errorf("failed to decode SQS message body as an S3 notification: %w", err)
 	}
+	//fmt.Println(dec)
 
 	var out []s3EventV2
 	for _, record := range events.Records {
@@ -191,6 +192,7 @@ func (p *ConfigInput) getS3Notifications(body string) ([]s3EventV2, error) {
 			return nil, fmt.Errorf("url unescape failed for '%v': %w", record.S3.Object.Key, err)
 		}
 		record.S3.Object.Key = key
+		//fmt.Printf("record :  %#v",record)
 
 		out = append(out, record)
 	}
