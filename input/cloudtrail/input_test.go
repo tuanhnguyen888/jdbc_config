@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
+	event2 "jdbc/event"
 	"testing"
 	"time"
 )
@@ -23,6 +24,7 @@ func TestName(t *testing.T) {
 		AccessKeyId:          "AKIA45DKQOCSAB3M5HIH",
 		SecretAccessKey:      "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",
 		SessionToken:         "",
+		ProxyUrl: "http://161.117.177.202:3128",
 		//RoleArn:              "arn:aws:iam::887134122148:role/aws-service-role/organizations.amazonaws.com/AWSServiceRoleForOrganizations",
 	}
 
@@ -32,7 +34,7 @@ func TestName(t *testing.T) {
 	go func() {
 		err = conf.Run(ctx)
 	}()
-	time.Sleep(50 * time.Second)
+	time.Sleep(20 * time.Second)
 	ctx.Done()
 	assert.NoError(t, err)
 	time.Sleep(200 * time.Millisecond)
@@ -77,4 +79,26 @@ func TestBody (t *testing.T) {
 	 err = conf.ReadJSON(context.TODO(),zip,s3EventV2{},1)
 	 assert.NoError(t, err)
 
+}
+
+func TestCreate(t *testing.T) {
+	message := "message testing"
+	obj := s3EventV2{
+		AWSRegion:   "us",
+		EventName:   "pushObj",
+		EventSource: "",
+		S3: struct {
+			Bucket struct {
+				Name string `json:"name"`
+				ARN  string `json:"arn"`
+			} `json:"bucket"`
+			Object struct {
+				Key string `json:"key"`
+			} `json:"object"`
+		}{},
+	}
+
+	event := CreateEvent(message,obj)
+	assert.IsType(t, event2.Event{},event)
+	logrus.Println(event)
 }

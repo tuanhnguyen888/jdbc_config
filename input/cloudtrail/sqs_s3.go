@@ -143,8 +143,6 @@ func (c *ConfigInput) processS3Events(ctx context.Context, body string,count int
 	if err != nil {
 		return err
 	}
-
-
 	if len(s3Events) == 0 {
 		return nil
 	}

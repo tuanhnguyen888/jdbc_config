@@ -126,7 +126,8 @@ func (p *ConfigInput) ReadJSON(ctx context.Context,r io.Reader,obj s3EventV2,cou
 		//}
 
 		data, _ := item.MarshalJSON()
-		evt := createEvent(string(data), obj)
+		fmt.Println("data :  ",string(data))
+		evt := CreateEvent(string(data), obj)
 
 		bashEvent = append(bashEvent,evt)
 		fmt.Println(bashEvent)
@@ -137,7 +138,7 @@ func (p *ConfigInput) ReadJSON(ctx context.Context,r io.Reader,obj s3EventV2,cou
 	return nil
 }
 
-func createEvent(message string, obj s3EventV2) event2.Event {
+func CreateEvent(message string, obj s3EventV2) event2.Event {
 	event := map[string]interface{}{
 		"Timestamp": time.Now().UTC(),
 		"Fields": map[string]interface{}{

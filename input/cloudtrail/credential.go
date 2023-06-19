@@ -13,26 +13,22 @@ import (
 
 func (c *ConfigInput) InitializeAWSConfig() (aws.Config, error) {
 	AWSConfig, _ := c.GetAWSCredentials()
-
-
-//Add ProxyUrl
-if c.ProxyUrl != "" {
-	proxyURL, err := url.Parse(c.ProxyUrl)
-	if err != nil {
-		fmt.Printf("Error parsing proxy URL: %s\\n", err)
-		return AWSConfig,err
+	//Add ProxyUrl
+	if c.ProxyUrl != "" {
+		proxyURL, err := url.Parse(c.ProxyUrl)
+		if err != nil {
+			fmt.Printf("Error parsing proxy URL: %s\\n", err)
+			return AWSConfig,err
+		}
+		httpClient := &http.Client{
+			Transport: &http.Transport{
+				Proxy: http.ProxyURL(proxyURL),
+			},
+		}
+		logrus.Println(proxyURL)
+		AWSConfig.HTTPClient = httpClient
 	}
-	httpClient := &http.Client{
-		Transport: &http.Transport{
-			Proxy: http.ProxyURL(proxyURL),
-		},
-	}
-	AWSConfig.HTTPClient = httpClient
-}
-return AWSConfig, nil
-
-
-
+	return AWSConfig, nil
 }
 
 func (c *ConfigInput)GetAWSCredentials() (aws.Config, error) {
