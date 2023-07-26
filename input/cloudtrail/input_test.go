@@ -3,28 +3,30 @@ package cloudtrail
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	event2 "jdbc/event"
+	"net/url"
 	"testing"
 	"time"
 )
 
 func TestName(t *testing.T) {
 	conf := &ConfigInput{
-		ApiTimeout:          120 ,
+		ApiTimeout:          21 ,
 		VisibilityTimeout:   300 ,
 		SQSWaitTime:         20 ,
 		MaxNumberOfMessages: 5,
 		Endpoint: "amazonaws.com",
 		DefaultRegion: "us-east-1",
 		QueueUrl: "https://sqs.us-east-1.amazonaws.com/887134122148/aws-cloudtrail",
-		AccessKeyId:          "AKIA45DKQOCSAB3M5HIH",
-		SecretAccessKey:      "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",
-		SessionToken:         "",
-		ProxyUrl: "http://161.117.177.202:3128",
+		AccessKeyId:          "AKIA45DKQOCSHDLUAQ7H",
+		SecretAccessKey:      "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",
+		//SessionToken:         "",
+		//ProxyUrl: "http://161.117.177.202:3128",
 		//RoleArn:              "arn:aws:iam::887134122148:role/aws-service-role/organizations.amazonaws.com/AWSServiceRoleForOrganizations",
 	}
 
@@ -101,4 +103,14 @@ func TestCreate(t *testing.T) {
 	event := CreateEvent(message,obj)
 	assert.IsType(t, event2.Event{},event)
 	logrus.Println(event)
+}
+
+func TestUrl(t *testing.T) {
+	urlStr, e := url.Parse("akdjadk.com:ada")
+
+	if e != nil {
+		fmt.Println("Yes! I,m check this error!, url ; ",e, urlStr)
+	} else {
+		fmt.Println("NO! I broken and kill your production, grrrrr:  ", urlStr)
+	}
 }

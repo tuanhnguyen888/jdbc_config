@@ -3,6 +3,10 @@ module jdbc
 go 1.13
 
 require (
+	github.com/Azure/azure-amqp-common-go/v3 v3.2.1
+	github.com/Azure/azure-event-hubs-go/v3 v3.3.15
+	github.com/Azure/azure-storage-blob-go v0.8.0
+	github.com/Azure/go-autorest/autorest v0.11.18
 	github.com/aws/aws-sdk-go-v2 v0.24.0
 	github.com/jinzhu/gorm v1.9.16
 	github.com/patrickmn/go-cache v2.1.0+incompatible
