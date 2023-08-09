@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"github.com/Azure/azure-amqp-common-go/v3/conn"
 	"github.com/Azure/azure-amqp-common-go/v3/sas"
-	eventhub "github.com/Azure/azure-event-hubs-go/v3"
-	"github.com/Azure/azure-event-hubs-go/v3/eph"
-	"github.com/Azure/azure-event-hubs-go/v3/storage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/Azure/go-autorest/autorest/azure"
+	eventhub "github.com/tuanhnguyen888/azure-event-hubs-go"
+	"github.com/tuanhnguyen888/azure-event-hubs-go/eph"
+	"github.com/tuanhnguyen888/azure-event-hubs-go/storage"
 	"time"
 )
 
